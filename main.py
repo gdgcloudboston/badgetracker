@@ -1,4 +1,5 @@
 """Badge Reader Cloud Run Service"""
+import json
 import os
 
 from flask import Flask
@@ -16,12 +17,17 @@ def get_secret(secret, version="latest"):
     return client.access_secret_version(request=request).payload.data.decode("UTF-8")
 
 
+OAUTH_CLIENT_INFO = get_secret("badgetracker-oauth-client-secret")
+
+
 @app.route("/")
 def index():
     """Display the main index page."""
+    oauth_client_info = json.loads(OAUTH_CLIENT_INFO)
+    client_id = oauth_client_info["web"]["client_id"]
+    print(f"Client ID: {client_id}")
+
     name = os.environ.get("NAME", "World")
-    secret = get_secret("badgetracker-oauth-client-secret")
-    print(secret)
     return "Hello {}!".format(name)
 
 

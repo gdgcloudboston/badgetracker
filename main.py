@@ -82,7 +82,6 @@ def login():
     authorization_endpoint = google_provider_cfg["authorization_endpoint"]
 
     redirect_uri = request.url_root + "callback"
-    redirect_uri = "https://7700-34-85-202-55.ngrok-free.app"
 
     # Use library to construct the request for Google login and provide
     # scopes that let you retrieve user's profile from Google

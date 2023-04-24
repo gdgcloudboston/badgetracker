@@ -1,0 +1,30 @@
+<p>
+    <b>User:</b> {{ current_user.name }}<br>
+</p>
+
+<p>
+<h2>Machine Learning Engineer Learning Path</h2>
+<ol>
+    {% for badge in ml_badges %}
+    <li>{{ badge }} {{ " - <b>COMPLETED</b>" | safe if badge in completed }}</li>
+    {% endfor %}
+</ol>
+</p>
+
+<p>
+<h2>Cloud Developer Learning Path</h2>
+<ol>
+    {% for badge in dev_badges %}
+    <li>{{ badge }} {{ " - <b>COMPLETED</b>" | safe if badge in completed }}</li>
+    {% endfor %}
+</ol>
+</p>
+
+<p>
+<h2>Cloud Architect Learning Path</h2>
+<ol>
+    {% for badge in arch_badges %}
+    <li>{{ badge }} {{ " - <b>COMPLETED</b>" | safe if badge in completed }}</li>
+    {% endfor %}
+</ol>
+</p>

@@ -1,12 +1,16 @@
-"""Badge Reader Cloud Run Service."""
+"""Badge Tracker Cloud Run Service."""
 import json
 import os
 import requests
 
+from bs4 import BeautifulSoup
+
 from flask import Flask
 from flask import redirect
+from flask import render_template
 from flask import request
 from flask import url_for
+
 from flask_login import current_user
 from flask_login import login_required
 from flask_login import login_user
@@ -24,15 +28,100 @@ app.secret_key = os.environ.get("SECRET_KEY") or os.urandom(24)
 
 DISCOVERY_URL = "https://accounts.google.com/.well-known/openid-configuration"
 
+arch_badges = [
+    "Preparing for your Professional Cloud Architect Journey",
+    "Google Cloud Fundamentals: Core Infrastructure",
+    "Essential Google Cloud Infrastructure: Foundation",
+    "Essential Google Cloud Infrastructure: Core Services",
+    "Elastic Google Cloud Infrastructure: Scaling and Automation",
+    "Reliable Google Cloud Infrastructure: Design and Process",
+    "Getting Started with Google Kubernetes Engine",
+    "Logging, Monitoring and Observability in Google Cloud",
+    "Create and Manage Cloud Resources",
+    "Perform Foundational Infrastructure Tasks in Google Cloud",
+    "Set Up and Configure a Cloud Environment in Google Cloud",
+    "Automating Infrastructure on Google Cloud with Terraform",
+    "Deploy and Manage Cloud Environments with Google Cloud",
+    "Optimize Costs for Google Kubernetes Engine",
+    "Cloud Architecture: Design, Implement, and Manage",
+]
+
+dev_badges = [
+    "Google Cloud Fundamentals: Core Infrastructure",
+    "Getting Started With Application Development",
+    "Securing and Integrating Components of your Application",
+    "App Deployment, Debugging, and Performance",
+    "Application Development with Cloud Run",
+    "Getting Started with Google Kubernetes Engine",
+    "Hybrid Cloud Modernizing Applications with Anthos",
+    "Serverless Cloud Run Development",
+    "Serverless Firebase Development",
+    "Deploy to Kubernetes in Google Cloud",
+]
+
+ml_badges = [
+    # "A Tour of Google Cloud Hands-on Labs",
+    "Google Cloud Big Data and Machine Learning Fundamentals",
+    "How Google Does Machine Learning",
+    "Launching into Machine Learning",
+    "TensorFlow on Google Cloud",
+    "Feature Engineering",
+    "Machine Learning in the Enterprise",
+    "Production Machine Learning Systems",
+    "Computer Vision Fundamentals with Google Cloud",
+    "Natural Language Processing on Google Cloud",
+    "Recommendation Systems on Google Cloud",
+    "Machine Learning Operations (MLOps): Getting Started",
+    "ML Pipelines on Google Cloud",
+    "Perform Foundational Data, ML, and AI Tasks in Google Cloud",
+    "Build and Deploy Machine Learning Solutions on Vertex AI",
+]
+
 
 class User(UserMixin):
     """User class."""
-    def __init__(self, user):
+    def __init__(self, user_info):
         """Initialize."""
-        self.id = user.get("sub")
-        self.name = user.get("name")
-        self.email = user.get("email")
-        self.profile_pic = user.get("picture")
+        self.id = user_info.get("sub")
+        self.name = user_info.get("name")
+        self.email = user_info.get("email")
+        self.picture = user_info.get("picture")
+        self.profile_url = user_info.get("profile_url")
+
+    def create(user_info):
+        """Save a user to firestore."""
+        sub = user_info.get("sub")
+        name = user_info.get("name")
+        email = user_info.get("email")
+        picture = user_info.get("picture")
+        print(f"Creating user: {name} <{email}> [{sub}]")
+
+        data = {
+            "sub": sub,
+            "email": email,
+            "name": name,
+            "picture": picture,
+        }
+        client = firestore.Client()
+        client.collection("users").document(sub).set(data)
+        return User(user_info)
+
+    def get(user_id):
+        """Returna user from Firestore."""
+        print(f"Getting user: {user_id}")
+        client = firestore.Client()
+        doc = client.collection("users").document(user_id).get()
+        if doc.exists:
+            return User(doc.to_dict())
+        print(f"User not found: {user_id}")
+        return None
+
+    def update(self, **kwargs):
+        """Update a user in Firestore."""
+        print(f"Updating user: {self.name} <{self.email}> [{self.id}]")
+        print(json.dumps(kwargs, indent=2, sort_keys=True))
+        client = firestore.Client()
+        client.collection("users").document(self.id).update(kwargs)
 
 
 def get_google_provider_cfg():
@@ -47,29 +136,6 @@ def get_secret(secret, version="latest"):
     secret_version_name = f'projects/{project}/secrets/{secret}/versions/{version}'
     req = {"name": secret_version_name}
     return client.access_secret_version(request=req).payload.data.decode("UTF-8")
-
-
-def get_user(user_id):
-    """Returna user from Firestore."""
-    client = firestore.Client()
-    user = client.collection("users").document(user_id).get()
-    if user.exists:
-        return User(user.to_dict())
-    return None
-
-
-def save_user(user):
-    """Save a user to firestore."""
-    email = user.get("email")
-    name = user.get("name")
-    # picture = user.get("picture")
-    sub = user.get("sub")
-    print(f"{name} <{email}> [{sub}]")
-
-    client = firestore.Client()
-    client.collection("users").document(sub).set(user)
-
-    return
 
 
 OAUTH_CLIENT_INFO = json.loads(get_secret("badgetracker-oauth-client-secret"))
@@ -91,23 +157,44 @@ client = WebApplicationClient(CLIENT_ID)
 def load_user(user_id):
     """Load a user."""
     print(f"Loading user: {user_id}")
-    return get_user(user_id)
+    return User.get(user_id)
 
 
 @app.route("/")
 def index():
     """Display the main index page."""
     if current_user.is_authenticated:
-        return (
-            "<p>Hello, {}! You're logged in! Email: {}</p>"
-            "<div><p>Google Profile Picture:</p>"
-            '<img src="{}" alt="Google profile pic"></img></div>'
-            '<a class="button" href="/logout">Logout</a>'.format(
-                current_user.name, current_user.email, current_user.profile_pic
-            )
-        )
+        return render_template("index.html", current_user=current_user)
     else:
-        return '<a class="button" href="/login">Google Login</a>'
+        return render_template("login.html")
+
+
+@app.route("/badges")
+@login_required
+def badges():
+    """Retrieve badges for the logged in user."""
+    profile_url = current_user.profile_url
+    if not profile_url:
+        return redirect(url_for("index"))
+    response = requests.get(profile_url)
+    soup = BeautifulSoup(response.content, "html.parser")
+    results = soup.findAll("span", class_="ql-subhead-1")
+
+    # get completed badges
+    completed = []
+    for result in results:
+        completed.append(result.text.strip())
+
+    print(f"Completed Badges: {len(completed)}")
+    print("\n".join(sorted(completed)))
+    return render_template(
+        "badges.html",
+        current_user=current_user,
+        completed=completed,
+        arch_badges=arch_badges,
+        dev_badges=dev_badges,
+        ml_badges=ml_badges,
+    )
 
 
 @app.route("/callback")
@@ -144,10 +231,13 @@ def callback():
     userinfo_endpoint = google_provider_cfg["userinfo_endpoint"]
     uri, headers, body = client.add_token(userinfo_endpoint)
     user_info = requests.get(uri, headers=headers, data=body).json()
+    unique_id = user_info.get("sub")
+    print(f"Unique ID: {unique_id}")
 
-    save_user(user_info)
-
-    user = User(user_info)
+    # Doesn't exist? Add it to the database.
+    user = User.get(unique_id)
+    if not user:
+        user = User.create(user_info)
 
     # Begin user session by logging the user in
     login_user(user)
@@ -179,6 +269,15 @@ def login():
 def logout():
     """Logout the user."""
     logout_user()
+    return redirect(url_for("index"))
+
+
+@app.route("/update")
+@login_required
+def update():
+    """Update the user's profile url."""
+    profile_url = request.args.get("profile_url")
+    current_user.update(profile_url=profile_url)
     return redirect(url_for("index"))
 
 

@@ -1,0 +1,27 @@
+<div>
+    <img src="{{ current_user.picture }}" alt="Google profile pic"></img>
+</div>
+
+<p>
+    <b>Name:</b> {{ current_user.name }}<br>
+    <b>Email:</b> {{ current_user.email }}<br>
+    <b>Profile URL:</b>
+    {% if current_user.profile_url -%}
+        <a href="{{ current_user.profile_url }}" target="_qwiklabs">{{ current_user.profile_url }}</a><br>
+        View your <a href="/badges">badges</a>.<br>
+    {% else -%}
+        <i>Not set</i><br>
+    {% endif -%}
+</p>
+
+<p>
+    {{ "Update" if current_user.profile_url else "Set" }} your Cloud Skills Boost Profile URL:
+    <form action="/update">
+        <input type="text" name="profile_url" placeholder="Profile URL" size="64"><br>
+        <input type="submit" value="Update Profile URL"><br>
+    </form>
+</p>
+
+<p>
+    <a class="button" href="/logout">Logout</a>
+<p>
